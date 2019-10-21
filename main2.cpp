@@ -1,9 +1,10 @@
 #include <Windows.h>
 #include <iostream>
+#include <iomanip>
 #include <string>
+#include <vector>
+#include <ctime>
 
-
-constexpr int32_t BUFFER_SIZE = 4096;
 int32_t g_bytesTransferred;
 
 const std::string getFilePrompt(const std::string& msg)
@@ -19,73 +20,122 @@ void FileIOCompletionRoutine(DWORD dwErrorCode, DWORD dwNumberOfBytesTransferred
 	g_bytesTransferred = dwNumberOfBytesTransferred;
 }
 
-int main()
+void copyFile(const std::string& file, const std::string& dest, const int32_t bufferSize, const int32_t threadsAmount)
 {
-	const std::string originFile = getFilePrompt("File to copy: ");
-	const std::string destFile = getFilePrompt("Destination: ");
+	std::vector<char*>buffers;
+	for(size_t i = 0; i < threadsAmount; ++i)
+		buffers.push_back(new char[bufferSize]);
 
-	const HANDLE originFileHandle = CreateFileA(originFile.c_str(),
-			                       GENERIC_READ,
-			                       FILE_SHARE_READ | FILE_SHARE_WRITE,
-			                       NULL,
-			                       OPEN_EXISTING,
-			                       FILE_FLAG_NO_BUFFERING | FILE_FLAG_OVERLAPPED,
-			                       NULL);
+	const HANDLE originFileHandle = CreateFileA(file.c_str(),
+																							GENERIC_READ,
+																							FILE_SHARE_READ | FILE_SHARE_WRITE,
+																							NULL,
+																							OPEN_EXISTING,
+																							FILE_FLAG_NO_BUFFERING | FILE_FLAG_OVERLAPPED,
+																							NULL);
 
 	if(originFileHandle == INVALID_HANDLE_VALUE)
 	{
 		std::cout << "Origin file is not opened. Last error code: " << GetLastError() << std::endl;
-		return 0;
+		return;
 	}
 
-	const HANDLE destFileHandle = CreateFileA(destFile.c_str(),
-			                                      GENERIC_READ | GENERIC_WRITE,
-			                                      FILE_SHARE_READ | FILE_SHARE_WRITE,
-			                                      NULL,
-			                                      CREATE_ALWAYS,
-			                                      FILE_FLAG_NO_BUFFERING | FILE_FLAG_OVERLAPPED,
-			                                      NULL);
+	const HANDLE destFileHandle = CreateFileA(dest.c_str(),
+																						GENERIC_READ | GENERIC_WRITE,
+																						FILE_SHARE_READ | FILE_SHARE_WRITE,
+																						NULL,
+																						CREATE_ALWAYS,
+																						FILE_FLAG_NO_BUFFERING | FILE_FLAG_OVERLAPPED,
+																						NULL);
 
 	if(destFileHandle == INVALID_HANDLE_VALUE)
 	{
 		std::cout << "Destination file is not opened. Last error code: " << GetLastError() << std::endl;
-		return 0;
+		return;
 	}
 
-	OVERLAPPED overlapped = {};
-	char buffer[BUFFER_SIZE] = {};
 	int32_t shift = 0;
 	int32_t readBytes = 0;
+	int32_t lastBuffer = -1;
+	int32_t readLast = -1;
+	std::vector<OVERLAPPED> overlappeds(threadsAmount);
+
+	auto t0 = clock();
 	do
 	{
-		overlapped.Offset = shift * BUFFER_SIZE;
-		if(!ReadFileEx(originFileHandle, buffer, BUFFER_SIZE, &overlapped, FileIOCompletionRoutine))
+		for(size_t i = 0; i < threadsAmount; ++i)
 		{
-			std::cout << "Error upon reading! Last error: " << GetLastError();
-			break;
+			overlappeds[i].Offset = (shift + i) * bufferSize;
+			if(!ReadFileEx(originFileHandle, buffers[i], bufferSize, &overlappeds[i], FileIOCompletionRoutine))
+			{
+				std::cout << "Error upon reading! Last error: " << GetLastError();
+				break;
+			}
+			SleepEx(1000, TRUE);
+			if(lastBuffer == -1 && g_bytesTransferred != bufferSize)
+			{
+				lastBuffer = i;
+				readLast = g_bytesTransferred;
+			}
 		}
-		SleepEx(1000, TRUE);
 
-		readBytes = g_bytesTransferred;
-		if(readBytes < BUFFER_SIZE)
-			memset(buffer + readBytes, '\0', BUFFER_SIZE - readBytes);
-
-		if(!WriteFileEx(destFileHandle, buffer, BUFFER_SIZE, &overlapped, FileIOCompletionRoutine))
+		for(size_t i = 0; i < threadsAmount; ++i)
 		{
-			std::cout << "Error upon writing! Last error: " << GetLastError();
-			break;
+			if(lastBuffer == -1 || lastBuffer >= i)
+			{
+				overlappeds[i].Offset = (shift + i) * bufferSize;
+				if(!WriteFileEx(destFileHandle, buffers[i], bufferSize, &overlappeds[i], FileIOCompletionRoutine))
+				{
+					std::cout << "Error upon writing! Last error: " << GetLastError();
+					break;
+				}
+				SleepEx(1000, TRUE);
+			}
 		}
-		SleepEx(1000, TRUE);
 
-		++shift;
-	}while(readBytes >= BUFFER_SIZE);
+		shift += threadsAmount;
+	}while(lastBuffer == -1);
+	auto t1 = clock();
 
-	SetFilePointer(destFileHandle, (shift - 1) * BUFFER_SIZE + readBytes, NULL, FILE_BEGIN);
+	const int32_t fileSize = (shift - threadsAmount + lastBuffer) * bufferSize + readLast;
+	std::cout << "SIZE " << fileSize << std::endl;
+	SetFilePointer(destFileHandle, fileSize, NULL, FILE_BEGIN);
 	SetEndOfFile(destFileHandle);
 	CloseHandle(originFileHandle);
 	CloseHandle(destFileHandle);
 
+		std::cout << "Buffer size: " << std::setw(5) << bufferSize << "B " << std::setw(0)
+							<< "Threads: " << std::setw(2) << threadsAmount << std::setw(0)
+		          << " Speed: "<< (double)fileSize / 1024 / ((double)(t1 - t0) / CLOCKS_PER_SEC) << "KB/s" << std::endl;
+
+	for(char* buffer : buffers)
+		delete[] buffer;
+
 	std::cout << std::endl << "Running file comparator..." << std::endl;
-	system((std::string("FC ") + originFile + std::string(" ") + destFile).c_str());
+	system((std::string("FC ") + file + std::string(" ") + dest).c_str());
+}
+
+int main()
+{
+	constexpr int32_t clusterSize = 512;
+
+	std::vector<int32_t> bufferSizes{clusterSize};
+	for(int i = 1; i <= 10; ++i)
+		bufferSizes.push_back(bufferSizes[bufferSizes.size() - 1] * 2);
+
+	std::vector<int32_t> threadsAmounts{1, 2, 4, 8, 12, 16};
+
+
+	const std::string originFile = "forcopy.png"; //getFilePrompt("File to copy: ");
+	const std::string destFile = "copied.png"; //getFilePrompt("Destination: ");
+
+	// checking for the best block size
+	for(const int32_t bufferSize : bufferSizes)
+		copyFile(originFile, destFile, bufferSize, 1);
+
+	// checking for the best threads amount
+	for(const int32_t threadsAmount : threadsAmounts)
+		copyFile(originFile, destFile, 4096, threadsAmount);
+
 	return 0;
 }
