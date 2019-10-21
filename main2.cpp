@@ -21,8 +21,8 @@ void FileIOCompletionRoutine(DWORD dwErrorCode, DWORD dwNumberOfBytesTransferred
 
 int main()
 {
-	const std::string originFile = "forcopy.png"; //getFilePrompt("File to copy: ");
-	const std::string destFile = "copied.png"; //getFilePrompt("Destination: ");
+	const std::string originFile = getFilePrompt("File to copy: ");
+	const std::string destFile = getFilePrompt("Destination: ");
 
 	const HANDLE originFileHandle = CreateFileA(originFile.c_str(),
 			                       GENERIC_READ,
