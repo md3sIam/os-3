@@ -98,15 +98,14 @@ void copyFile(const std::string& file, const std::string& dest, const int32_t bu
 	auto t1 = clock();
 
 	const int32_t fileSize = (shift - threadsAmount + lastBuffer) * bufferSize + readLast;
-	std::cout << "SIZE " << fileSize << std::endl;
 	SetFilePointer(destFileHandle, fileSize, NULL, FILE_BEGIN);
 	SetEndOfFile(destFileHandle);
 	CloseHandle(originFileHandle);
 	CloseHandle(destFileHandle);
 
-		std::cout << "Buffer size: " << std::setw(5) << bufferSize << "B " << std::setw(0)
-							<< "Threads: " << std::setw(2) << threadsAmount << std::setw(0)
-		          << " Speed: "<< (double)fileSize / 1024 / ((double)(t1 - t0) / CLOCKS_PER_SEC) << "KB/s" << std::endl;
+	std::cout << "Buffer size: " << std::setw(5) << bufferSize << "B " << std::setw(0)
+						<< "Threads: " << std::setw(2) << threadsAmount << std::setw(0)
+						<< " Speed: "<< (double)fileSize / 1024 / ((double)(t1 - t0) / CLOCKS_PER_SEC) << "KB/s" << std::endl;
 
 	for(char* buffer : buffers)
 		delete[] buffer;
@@ -125,9 +124,8 @@ int main()
 
 	std::vector<int32_t> threadsAmounts{1, 2, 4, 8, 12, 16};
 
-
-	const std::string originFile = "forcopy.png"; //getFilePrompt("File to copy: ");
-	const std::string destFile = "copied.png"; //getFilePrompt("Destination: ");
+	const std::string originFile = getFilePrompt("File to copy: ");
+	const std::string destFile = getFilePrompt("Destination: ");
 
 	// checking for the best block size
 	for(const int32_t bufferSize : bufferSizes)
@@ -137,5 +135,6 @@ int main()
 	for(const int32_t threadsAmount : threadsAmounts)
 		copyFile(originFile, destFile, 4096, threadsAmount);
 
+	system("pause");
 	return 0;
 }

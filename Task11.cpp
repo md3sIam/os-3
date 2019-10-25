@@ -49,7 +49,22 @@ void Task11::diskInfo()
 						 << L"Volume serial number: " << volSerialNumber << std::endl
 						 << L"Max file name length: " << maxComponentLength << std::endl
 						 << L"File system flags: " << std::hex << fileSystemFlags << std::dec << std::endl
+						 << L"File case preserved names: " << bool(fileSystemFlags & FILE_CASE_PRESERVED_NAMES) << std::endl
+						 << L"File case sensitivesearch: " << bool(fileSystemFlags & FILE_CASE_SENSITIVE_SEARCH) << std::endl
+						 << L"File compression: " << bool(fileSystemFlags & FILE_FILE_COMPRESSION) << std::endl
+						 << L"File named streams: " << bool(fileSystemFlags & FILE_NAMED_STREAMS) << std::endl
+						 << L"Persistent acls: " << bool(fileSystemFlags & FILE_PERSISTENT_ACLS) << std::endl
+						 << L"Read only: " << bool(fileSystemFlags & FILE_READ_ONLY_VOLUME) << std::endl
+						 << L"Supports unicode: " << bool(fileSystemFlags & FILE_UNICODE_ON_DISK) << std::endl
+						 << L"Supports sparse: " << bool(fileSystemFlags & FILE_SUPPORTS_SPARSE_FILES) << std::endl
+						 << L"Supports transactions: " << bool(fileSystemFlags & FILE_SUPPORTS_TRANSACTIONS) << std::endl
+						 << L"Compressed: " << bool(fileSystemFlags & FILE_VOLUME_IS_COMPRESSED) << std::endl
+						 << L"Supports object ids: " << bool(fileSystemFlags & FILE_SUPPORTS_OBJECT_IDS) << std::endl
+						 << L"Supports open by id: " << bool(fileSystemFlags & FILE_SUPPORTS_OPEN_BY_FILE_ID) << std::endl
 						 << L"File system name: " << fileSystemNameBuffer << std::endl;
+
+	printBitMask(fileSystemFlags);
+	std::cout << std::endl;
 
 	DWORD sectorsPerCluster,
 				bytesPerSector,
@@ -104,7 +119,7 @@ void Task11::createFile()
 			                0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if(hFile == INVALID_HANDLE_VALUE)
 		std::cout << "File has not been created!" << std::endl;
-	// CloseHandle(hFile);
+	CloseHandle(hFile);
 }
 
 void Task11::copyMoveFile()
@@ -221,7 +236,7 @@ void Task11::fileAttrsDialog()
 	}
 
 	printFileInfo(info);
-	// CloseHandle(hFile);
+	CloseHandle(hFile);
 }
 
 void Task11::setFileAttrsDialog()
@@ -239,7 +254,7 @@ void Task11::setFileAttrsDialog()
 	if(!SetFileAttributesW(filename.c_str(), attrs) ||
 	   !SetFileTime(hFile, &filetimes[0], &filetimes[1], &filetimes[2]))
 		std::cout << "Something went wrong upon setting attributes" << std::endl;
-	// CloseHandle(hFile);
+	CloseHandle(hFile);
 }
 
 void Task11::printDecodedAttributes(const DWORD attrs)
@@ -300,5 +315,5 @@ const DWORD Task11::fillFileAttrsDialog()
 const std::vector<FILETIME> Task11::fillFileTimeDialog()
 {
 	// \todo dates input will be written someday!
-	return {{0, 0}, {0, 1}, {0, 2}};
+	return {{0, 1}, {0, 2}, {0, 3}};
 }
